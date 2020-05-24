@@ -13,6 +13,7 @@ import requests
 
 from typing import List
 from data_loader import data_loader, multithread
+import os
 
 # =============================================================================
 # 
@@ -28,6 +29,19 @@ test_tickers = stock_tickers.loc[:100, "symbol"]
 a2=data_loader.get_stock_data_from_lst(stock_tickers.loc[:, "symbol"], combine= False)
 
 
+a3=data_loader.combine_stock_data_from_lst(a2.data, True)
+#a4=data_loader.combine_stock_data_from_lst(a2.data, False)
+
+a3.to_csv(f"{os.path.abspath(os.getcwd())}\\all_data.csv")
+
+
+n=a3.shape[1]
+d=int(np.floor(n / 2))
+
+out = [a3.iloc[:,:d], a3.iloc[:,d:n]]
+[df.to_csv(f"{os.path.abspath(os.getcwd())}\\all_data_{i+1}.csv") for i, df in enumerate(out)]
+
+
 
 #hastighed
 performance_test=[
@@ -38,3 +52,4 @@ performance_test=[
     (500, 440.2024414539337)
 ]
 (3528.2286722660065)
+(216.1107530593872, 1790.620233297348)

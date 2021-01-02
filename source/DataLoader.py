@@ -10,8 +10,6 @@ import requests
 from typing import List
 from config import token
 
-import collections
-
 class Stock:
     
     def __init__(self, symbol: str, start: datetime):

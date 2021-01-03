@@ -104,6 +104,7 @@ class DataLoader:
                      
     def __init__(self, lst_symbols: List[str], start: datetime = datetime(2000,1,1), combine: bool = True, multiprocess: bool = True):
         
+        self.symbols = lst_symbols
         self.raw_data = [Stock(sym, start) for sym in lst_symbols]
     
                 
@@ -143,11 +144,11 @@ class DataLoader:
         return out.sort_values("Date").set_index("Date")
         
     
-    def get_stock_profile(lst_stock_data_class: List[Stock]):
+    def get_stock_profiles(self):
     
         out=[]
         
-        for df, symbol, error in lst_stock_data_class:
+        for symbol in self.symbols:
             
             r = requests.get(f'https://finnhub.io/api/v1/stock/profile2?symbol={symbol}&token={token}')
             
@@ -167,5 +168,5 @@ class DataLoader:
                 
             sleep(1)
                 
-        return pd.DataFrame(out).rename(columns = dict(enumerate(["symbol", "industry", "exchange", "currency"])))
+        self.profiles = pd.DataFrame(out).rename(columns = dict(enumerate(["symbol", "industry", "exchange", "currency"])))
     

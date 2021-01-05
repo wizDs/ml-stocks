@@ -12,13 +12,13 @@ from config import token
 
 class Stock:
     
-    def __init__(self, symbol: str, start: datetime):
+    def __init__(self, symbol: str, start: datetime, interval: str = 'd'):
         
         self.symbol = symbol
 
         
         try:
-            self.data   = web.DataReader(symbol, 'yahoo', start).rename(str.lower, axis = "columns")
+            self.data   = web.get_data_yahoo(symbol, start, interval = interval).rename(str.lower, axis = "columns")
             self.error  = False
                     
         except:
@@ -100,10 +100,10 @@ class Multithread:
     
 class DataLoader:
                      
-    def __init__(self, lst_symbols: List[str], start: datetime = datetime(2000,1,1), combine: bool = True, multiprocess: bool = True):
+    def __init__(self, lst_symbols: List[str], start: datetime = datetime(2000,1,1), interval: str = 'd', combine: bool = True, multiprocess: bool = True):
         
         self.symbols = lst_symbols
-        self.raw_data = [Stock(sym, start) for sym in lst_symbols]
+        self.raw_data = [Stock(sym, start, interval) for sym in lst_symbols]
     
                 
         self.excluded_sym = [x.symbol for x in self.raw_data if x.error == True]
@@ -168,3 +168,16 @@ class DataLoader:
                 
         self.profiles = pd.DataFrame(out).rename(columns = dict(enumerate(["symbol", "industry", "exchange", "currency"])))
     
+    
+    def __repr__(self):
+        
+        summary = """
+        data: 
+            number of rows:             {nrows}
+            number of columns:          {ncols}
+            number of excluded stocks:  {nexcl}
+        """.format(nrows = self.data.shape[0], 
+                   ncols = self.data.shape[1], 
+                   nexcl = len(self.excluded_sym))
+        
+        return summary 

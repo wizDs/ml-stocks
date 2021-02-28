@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta, date
 
-from typing import List, Optional
+from typing import List, Optional, Mapping
 #from DataLoader import DataLoader, Multithread
 import pandas_datareader.data as web
 from NumberOfStocksToBuy import NumberOfStocksToBuy
@@ -35,248 +35,104 @@ c25_stocks = [
     'PNDORA.CO',
 ]
 
-def pctChange(x: List[float]) -> List[float]:
-    
-    return pd.Series(x).pct_change().tolist()[1:]
+from Class.TrainingDataGenerator import TrainingDataGenerator
 
 
-class StockPrice:
-    
-    def __init__(self, date: date, price: float, volume: int):
-        
-        self.date = date.date() if isinstance(date, datetime) else date
-        self.price = round(price, 2)
-        self.volume = volume
-        
-        
-    def __repr__(self):
-        return '{date}: {price}'.format(
-                date = self.date,
-                price = self.price,
-            )
-    
+tdGenerator = TrainingDataGenerator()
+td = tdGenerator.byStockName('GN.CO', start = date(2011, 1, 1))
 
-class DataSplit:
-    
-    def __init__(self, current: StockPrice, compared: List[StockPrice]):
-                
-        self.current = current 
-        self.compared = [p for p in compared]
-       
-    
+td.plotTimeSeries()
 
-class CurrPriceAndFuturePrices(DataSplit):
-    
-    def __init__(self, current: StockPrice, future: List[StockPrice]):
-        
-        DataSplit.__init__(self, current, future)
-        
+from Class.TrainingData import TrainingData
 
-    def __repr__(self):
-        return 'current; {curr} - future (t = {t}); {future}'.format(
-                curr   = self.current,
-                future = np.mean([x.price for x in self.compared]).round(2),
-                t      = len(self.compared),
-            )
+def splitDataAtTimeT(td: TrainingData, t: int, q: int = 60, futureHorizon: int = 30):
+    
+    assert t > q, 'minimum q = {q} data required and thus t must be larger than q'
+    
+    data = td.labeledData.copy()
+    
+    availableDataAtTimeT     = data.iloc[:t+1]
+    futureData               = data.iloc[t+1:t+1+futureHorizon]
+    availableDataForTraining = availableDataAtTimeT.iloc[:-futureHorizon]
+    
+    X_train = availableDataForTraining.drop(columns =['label'])
+    y_train = availableDataForTraining.label
+    X_test  = futureData.drop(columns =['label'])
+    y_test  = futureData.label
+    
+    
+    from sklearn.ensemble import RandomForestRegressor# Instantiate model with 1000 decision trees
+    rf = RandomForestRegressor(n_estimators = 1000, random_state = 42)# Train the model on training data
+    rf.fit(X_train, y_train);    
 
-class CurrPriceAndPastPrices(DataSplit):
+    y_pred = rf.predict(X_test)
     
-    def __init__(self, current: StockPrice, pastPrices: List[StockPrice]):
-               
-        DataSplit.__init__(self, current, pastPrices)
-        
-
-    def __repr__(self):
-        return 'current; {curr} - past (k = {k}); {past}'.format(
-                curr   = self.current,
-                past = np.mean([x.price for x in self.compared]).round(2),
-                k      = len(self.compared),
-            )
-
-    
-
-class StockProcess:
-    
-    def __init__(self, stockName: str, stockPrices: List[StockPrice]):
-        
-        self.stockName = stockName
-        self.stockPrices = stockPrices
-                
-    
-    def splitCurrPriceAndNextTDays(self, t: int) -> List[CurrPriceAndFuturePrices]:
-        
-        assert len(self.stockPrices) > t, 'not enough data for t = {t} (#prices = {n})'.format(t = t, n = len(self.stockPrices))
-        
-        dataSplit = list()
-        
-        for i in range(len(self.stockPrices)):
-           
-            current = self.stockPrices[i]
-            future  = self.stockPrices[i+1: i+1+t]
-            
-            if len(future) == t:
-            
-                dataSplit.append(CurrPriceAndFuturePrices(current, future))
-            
-        return dataSplit
-            
-
-    def splitCurrPriceAndPastKDays(self, k: int) -> List[CurrPriceAndPastPrices]:
-        
-        assert len(self.stockPrices) > k, 'not enough data for k = {k} (#prices = {n})'.format(k = k, n = len(self.stockPrices))
-        
-        dataSplit = list()
-        
-        for i in range(len(self.stockPrices)):
-           
-            current = self.stockPrices[i]
-            past    = self.stockPrices[i - k: i]
-            
-            if len(past) == k:
-            
-                dataSplit.append(CurrPriceAndPastPrices(current, past))
-            
-        return dataSplit
-            
-
-class Features:
-    
-    def __init__(self, date: date, values: List[float]):
-        self.date   = date
-        self.values = values
-        
-    def prepareForPd(self):
-        
-        featuresWithCurrentDate = {'date': self.date}
-        for i, featureValue in enumerate(self.values):
-            featuresWithCurrentDate[i] = featureValue
-            
-        return featuresWithCurrentDate
-        
-class Measurement:
-    
-    def __init__(self, date: date, value: float):
-        self.date   = date
-        self.value  = value
-        
-    def prepareForPd(self):
-        
-        return {'date': self.date, 'label': self.value}
-        
-class TrainingData:
-    
-    def __init__(self, stockProcess: StockProcess, k: int, t: int, p: float):
-        
-        self.stockName       = stockProcess.stockName
-        self.stockPrices     = stockProcess.stockPrices
-        
-        # Future
-        currAndFuture   = stockProcess.splitCurrPriceAndNextTDays(t = t)        
-        self.nFutureDaysMoreExpensiveThanCurrentPrice = self.countDaysMoreExpensiveThanCurrent(currAndFuture, p = p)
-        self.futurePrices    = self.comparedPricesPerCurrentDate(currAndFuture)
-        
-        # Past
-        currAndPast     = stockProcess.splitCurrPriceAndPastKDays(k = k)
-        self.nPastDaysMoreExpensiveThanCurrentPrice   = self.countDaysMoreExpensiveThanCurrent(currAndPast, p = p)
-        self.pastPrices      = self.comparedPricesPerCurrentDate(currAndPast)
-        self.featuresForCurrentPrice = self.splitCurrentEntityAndPast(self.nPastDaysMoreExpensiveThanCurrentPrice, k = k)
-    
-        # For each date, join the past (features) and the future (label)
-        dataframe          = self.joinFeaturesAndLabels()
-        self.labeledData   = dataframe.query("label.notna()")
-        self.unlabeledData = dataframe.query("label.isna()")
-        
-        # split into features (X) and labels (y)
-        self.X = self.labeledData.drop(columns = ['label']).copy()
-        self.y = self.labeledData.label.copy()
-    
-    def countDaysMoreExpensiveThanCurrent(self, dataPairList: List[DataSplit], p: float) -> List[Measurement]:
-                
-        measurements = list()
-        
-        for dataPair in dataPairList:
-            
-            measurement = sum(1 for x in dataPair.compared if dataPair.current.price * (1 + p) < x.price)
-            measurements.append(Measurement(dataPair.current.date, measurement))
-            
-        return measurements
-            
-            
-        
-    def splitCurrentEntityAndPast(self, measurements: List[Measurement], k: int) -> List[Features]:
-        
-        i = 0
-        pastMeasurements = list()
-        
-        for i in range(len(measurements)):
-                       
-            if i >= k:
-                
-                currentDate  = measurements[i].date
-                pastCounts   = [x.value for x in measurements[i - k + 1: i + 1]]
-                
-                pastMeasurements.append(Features(currentDate, pastCounts))
-                    
-            
-            i =+ 1
-            
-        return pastMeasurements
-        
-        
-    def comparedPricesPerCurrentDate(self, dataPairList: List[DataSplit]):
-    
-        comparedPrices = dict()
-        
-        for dataPair in dataPairList:
-            
-            currentDate = dataPair.current.date
-            comparedPrices[currentDate] = [x.price for x in dataPair.compared]
-
-        return comparedPrices
-    
-    def joinFeaturesAndLabels(self):
-        
-        labelsDf   = pd.DataFrame([m.prepareForPd() for m in self.nFutureDaysMoreExpensiveThanCurrentPrice])
-        featuresDf = pd.DataFrame([f.prepareForPd() for f in self.featuresForCurrentPrice])
-        
-        finalDf = featuresDf.merge(labelsDf, on = 'date', how = 'left').set_index('date')
-        
-        return finalDf
-    
-    def pctPriceChange(self, dataPairList: List[CurrPriceAndPastPrices]):
-        
-        features = list()
-        
-        for dataPair in dataPairList:
-            
-            featureValues = pctChange([x.price for x in dataPair.compared] + [dataPair.current.price])    
-            features.append(Features(dataPair.current.date, featureValues))
-            
-        return features
-            
+    startTraining = min(availableDataForTraining.index)
+    endTraining   = max(availableDataForTraining.index)
+   
+    return pd.DataFrame({'TrainingStart': startTraining, 'TrainingEnd': endTraining, 'RegressionForrest' : y_pred.round(), 'Actual' : y_test}).iloc[0]
 
 
-stockName = 'NOVO-B.CO'
+
+listPredictions = list()
+for i in range(1000, 1365):#range(1000, td.X.shape[0] + 1):
+    
+    dataPrediction = splitDataAtTimeT(td, t = i)
+    listPredictions.append(dataPrediction)
+    
 
 
-data = web.get_data_yahoo(stockName, start = datetime(2011,1,1))\
-            .reset_index()\
-            .rename(str.lower, axis = "columns")\
-            .loc[:,['date', 'close', 'volume']]
+a=pd.DataFrame(listPredictions)
 
-stockPrices = [StockPrice(*s) for s in data.values]
-sp = StockProcess(stockName, stockPrices)
-td = TrainingData(sp, 30, 30, 0.02)
+a[['RegressionForrest']].plot()
+a[['Actual']].plot()
+a['Price']= a.index.map(td.stockPriceMapper)
+
+
+
+a['RegressionForrest']
+
+
+
+
+td.labeledData.merge(a[['RegressionForrest']], left_index = True, right_index = True, how = 'inner')
+td.labeledData.index
+a.index
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# create figure and axis objects with subplots()
+fig, ax = plt.subplots(dpi = 150)
+# make a plot
+sns.lineplot(a.index, a.Price, color="red")
+# set x-axis label
+ax.set_xlabel("",fontsize=14)
+# set y-axis label
+ax.set_ylabel("Stock Price (GN Store)",color="red",fontsize=14)
+
+ax.set_title("High model score means high recommendation for buying")
+plt.xticks(rotation=90)
+
+# twin object for two different y-axis on the sample plot
+ax2=ax.twinx()
+# make a plot with different y-axis using second axis object
+sns.lineplot(a.index, a["RegressionForrest"],color="blue")
+ax2.set_ylabel("Model score",color="blue",fontsize=14)
+
+plt.show()
+
+# save the plot as a file
+fig.savefig('model_performance.jpg',
+            format='jpeg',
+            dpi=200,
+            bbox_inches='tight')
+
+
 
 
 # Training
 X = td.X.copy()
-# X['season'] = X.index.map(lambda x: x.month).astype(str)
-from sklearn.preprocessing import OneHotEncoder
-ohe = OneHotEncoder(drop = 'first')
-months = X.index.map(lambda x: x.month).values.reshape(-1 ,1)
-ohe.fit(months)
-season = pd.DataFrame(ohe.transform(months).toarray(), index = X.index)
 y = td.y.copy()
 
 # Split data
@@ -287,15 +143,13 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.20, rand
 from sklearn.linear_model import LinearRegression
 lr = LinearRegression()
 lr.fit(X_train, y_train)
+y_pred_lr = lr.predict(X_test)
 
 
-
-# Import the model we are using
+# random forrest
 from sklearn.ensemble import RandomForestRegressor# Instantiate model with 1000 decision trees
 rf = RandomForestRegressor(n_estimators = 1000, random_state = 42)# Train the model on training data
 rf.fit(X_train, y_train);
-
-y_pred_lr = lr.predict(X_test)
 y_pred_rf = rf.predict(X_test)
 
 
@@ -306,38 +160,34 @@ summaryPred['past']  = list(X_test.values)
 
 summaryPred.to_csv('temp.csv', sep = ';')
 
+# Unlabeled
+from functools import partial
+def mapToScore(moreExpensiceThanCurrentPriceCount: int, t: int) -> int:
+    return moreExpensiceThanCurrentPriceCount / t * 10
 
 
-pricesForUnlabeled = pd.DataFrame([{'date': stock.date, 'price': stock.price} for stock in td.stockPrices[-30:]]).set_index('date')
+X_unlabeled = td.unlabeledData.copy().drop(columns = ['label'])
 
-featuresForUnlabeled = pd.DataFrame(td.featuresFromPast[-30:]).rename(columns = {0: 'date'}).set_index('date')
-pd.DataFrame(zip(featuresForUnlabeled.index, lr.predict(featuresForUnlabeled), pricesForUnlabeled.price))\
-            .rename(columns = dict(enumerate(['date', 'pred', 'current'])))\
-            .assign(future = lambda df: df.date.map(td.pricesFromFuture.get))
-            
-pd.DataFrame(zip(featuresForUnlabeled.index, rf.predict(featuresForUnlabeled), pricesForUnlabeled.price))\
-            .rename(columns = dict(enumerate(['date', 'pred', 'current'])))\
-            .assign(future = lambda df: df.date.map(td.pricesFromFuture.get))
+# linear regression
+y_pred_lr_unlabeled = lr.predict(X_unlabeled)
 
+# random forrest
+y_pred_rf_unlabeled = rf.predict(X_unlabeled)
 
+summaryUnlabeled = pd.DataFrame({
+     'Date': X_unlabeled.index,
+     #'LogisticRegression': map(partial(mapToScore, t = 30), y_pred_lr_unlabeled),
+     'LogisticRegression': y_pred_lr_unlabeled.round(),
+     'RandomForrest': y_pred_rf_unlabeled.round(),
+     'Price' : X_unlabeled.index.map(td.stockPriceMapper)
+ })
 
-td.stockPrices
+summaryUnlabeled
+
 
 
 sum((y_pred_lr.round() - y_test) ** 2)
 sum((y_pred_rf.round() - y_test) ** 2)
-
-from collections import Counter
-Counter([s.countDaysWithPotentialProfit() for s in sp])
-
-for x in sp:
-
-    print(sum(1 for p in x.futurePrices if x.currentPrice.priceClose < p.priceClose))
-
-
-
-        
-                
 
 
 
@@ -355,9 +205,6 @@ for stockName in c25_stocks:
         
         stockPrices = [StockPrice(*s) for s in data.values]
         
-        
-        pctChange = data.set_index('date').pct_change().reset_index()
-        stockPricesPct = [StockPrice(*s) for s in data.values]
         
         
         

@@ -82,22 +82,15 @@ for i in range(1000, 1365):#range(1000, td.X.shape[0] + 1):
     
 
 
-a=pd.DataFrame(listPredictions)
+z=pd.DataFrame(listPredictions)
+z['Price']= z.index.map(td.stockPriceMapper)
+z['RegressionForrest'] = z.eval('sqrt(RegressionForrest / 30) * 10')
 
-a[['RegressionForrest']].plot()
-a[['Actual']].plot()
-a['Price']= a.index.map(td.stockPriceMapper)
+#z.to_csv('')
 
+a = z.copy()
+a = a[pd.Series(a.index).between(date(2016, 1, 1), date(2016, 5, 1)).values]
 
-
-a['RegressionForrest']
-
-
-
-
-td.labeledData.merge(a[['RegressionForrest']], left_index = True, right_index = True, how = 'inner')
-td.labeledData.index
-a.index
 
 import matplotlib.pyplot as plt
 import seaborn as sns

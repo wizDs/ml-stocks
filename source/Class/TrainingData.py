@@ -12,26 +12,27 @@ from .Features import Features
 
 class EvaluationData:
     
-    def __init__(self, pastAndCurrentData: pd.DataFrame, currentData: pd.DataFrame):
+    def __init__(self, pastAndCurrentData: pd.DataFrame, currentData: pd.DataFrame, t: int):
         
         
         self.X_train     = pastAndCurrentData.drop(columns =['label'])
         self.y_train     = pastAndCurrentData.label
-        self.X_test      = currentData.drop(columns = ['label'])
+        self.X_test      = currentData.drop(index = ['label'])
         self.y_test      = currentData.label
         
-        self.no_data     = len(self.X_train) > 0
+        self.t           = t
+        self.currentDate = self.X_test.name
         
     def __repr__(self):
         
-        start = min(self.X_train.index) if self.no_data else ''
-        end   = max(self.X_train.index) if self.no_data else ''
+        emptySet = len(self.X_train) > 0
+        start    = min(self.X_train.index) if emptySet else ''
+        end      = max(self.X_train.index) if emptySet else ''
         
         
         return 'EvaluationData(current date: {currentDate}, training period: {period})'.format(
-                    currentDate   = self.X_test.name,
-                    period         = f'{start} - {end}' if self.no_data else 'None',
-                    
+                    currentDate   = self.currentDate,
+                    period         = f'{start} - {end}' if emptySet else 'None',
                 )
 
 
@@ -171,6 +172,6 @@ class TrainingData:
         availableTrainingDataAtTimeX = availableDataAtTimeX.iloc[:-(self.t)]
         currentData                  = availableDataAtTimeX.iloc[-1]
         
-        return EvaluationData(availableTrainingDataAtTimeX, currentData)
+        return EvaluationData(availableTrainingDataAtTimeX, currentData, self.t)
         
         

@@ -41,7 +41,7 @@ from Class.TrainingDataGenerator import TrainingDataGenerator
 tdGenerator = TrainingDataGenerator()
 td = tdGenerator.byStockName('GN.CO', start = date(2011, 1, 1))
 
-td.plotTimeSeries()
+# td.plotTimeSeries()
 
 from Class.TrainingData import TrainingData
 
@@ -67,11 +67,55 @@ def splitDataAtTimeT(td: TrainingData, t: int, q: int = 60, futureHorizon: int =
 
     y_pred = rf.predict(X_test)
     
+    
+    
+    
+    # class PointModelPrediction:
+        
+    #     def __init__(self):
+    
+    #     from sklearn.ensemble import RandomForestRegressor# Instantiate model with 1000 decision trees
+    # rf = RandomForestRegressor(n_estimators = 1000, random_state = 42)# Train the model on training data
+    # rf.fit(X_train, y_train);    
+
+    # y_pred = rf.predict(X_test)
+    
+    
+    
+    
     startTraining = min(availableDataForTraining.index)
     endTraining   = max(availableDataForTraining.index)
    
     return pd.DataFrame({'TrainingStart': startTraining, 'TrainingEnd': endTraining, 'RegressionForrest' : y_pred.round(), 'Actual' : y_test}).iloc[0]
 
+
+evaluationData = [td.splitDataAtIndex(index = i) for i in range(1000, 2000, 5)]
+
+
+
+    
+evaluationData = td.splitDataAtIndex(index = 1000)
+    
+    
+
+rf = ModelPrediction(evaluationData)
+rf.predict(evaluationData.X_test.values.reshape(-1, 1))
+
+
+evaluationData.X_test.values.reshape(-1, 1)
+evaluationData.X_train.values.reshape(-1, 1)
+
+
+
+evaluationData 
+
+td.X.iloc[1000].name
+
+
+evaluationData.X_train
+evaluationData.X_train
+
+EvaluationData()
 
 
 listPredictions = list()

@@ -10,10 +10,36 @@ from .DataPair import DataPair
 from .Measurement import Measurement
 from .Features import Features
 
+class EvaluationData:
+    
+    def __init__(self, pastAndCurrentData: pd.DataFrame, currentData: pd.DataFrame):
+        
+        
+        self.X_train     = pastAndCurrentData.drop(columns =['label'])
+        self.y_train     = pastAndCurrentData.label
+        self.X_test      = currentData.drop(columns = ['label'])
+        self.y_test      = currentData.label
+        
+        self.no_data     = len(self.X_train) > 0
+        
+    def __repr__(self):
+        
+        start = min(self.X_train.index) if self.no_data else ''
+        end   = max(self.X_train.index) if self.no_data else ''
+        
+        
+        return 'EvaluationData(current date: {currentDate}, training period: {period})'.format(
+                    currentDate   = self.X_test.name,
+                    period         = f'{start} - {end}' if self.no_data else 'None',
+                    
+                )
+
+
 class TrainingData:
     
     def __init__(self, stockProcess: StockProcess, k: int, t: int, p: float):
         
+        self.t = t
         self.stockName       = stockProcess.stockName
         self.stockPrices     = stockProcess.stockPrices
         self.stockPriceMapper= stockProcess.getMapper()
@@ -136,3 +162,15 @@ class TrainingData:
         ax.set_ylabel('closing price')
         ax.grid()
         plt.show()
+    
+    def splitDataAtIndex(self, index: int) -> EvaluationData:
+        
+        data = self.labeledData.copy()
+        
+        availableDataAtTimeX         = data.iloc[:index+1]        
+        availableTrainingDataAtTimeX = availableDataAtTimeX.iloc[:-(self.t)]
+        currentData                  = availableDataAtTimeX.iloc[-1]
+        
+        return EvaluationData(availableTrainingDataAtTimeX, currentData)
+        
+        

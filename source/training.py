@@ -9,7 +9,7 @@ from NumberOfStocksToBuy import NumberOfStocksToBuy
 
 from Class.TrainingDataGenerator import TrainingDataGenerator
 from Class.TrainingData import TrainingData
-from Class.ModelPrediction import ModelPrediction
+from Class.ModelPrediction import ModelPrediction, ModelScore
 
 c25_stocks = [
     'FLS.CO',
@@ -45,6 +45,18 @@ tdGenerator = TrainingDataGenerator()
 td = tdGenerator.byStockName('GN.CO', start = date(2011, 1, 1))
 
 evaluationDataList = [td.splitDataAtIndex(index = i) for i in range(1000, len(td.X) + 1)]
+
+ed=evaluationDataList[1000]
+
+rf = ModelPrediction(ed)    
+pred = rf.predictSeries(ed.X_test)
+
+import json
+ModelScore(ed.currentDate, pred).toJson(f'{ed.currentDate}.txt')
+
+
+
+
 
 
 listPredictions = list()
@@ -158,34 +170,6 @@ summaryUnlabeled
 
 sum((y_pred_lr.round() - y_test) ** 2)
 sum((y_pred_rf.round() - y_test) ** 2)
-
-
-
-stockDf = list()
-
-for stockName in c25_stocks:
-    
-    print(stockName)
-    
-    try:
-        data = web.get_data_yahoo(stockName, start = datetime(2000,1,1))\
-                    .reset_index()\
-                    .rename(str.lower, axis = "columns")\
-                    .loc[:,['date', 'low', 'high', 'open', 'close', 'volume']]
-        
-        stockPrices = [StockPrice(*s) for s in data.values]
-        
-        
-        
-        
-        
-    except:
-        
-        stockPricesDay = []
-        
-
-    stockDf.append()
-
 
 
 danskeBank = web.get_data_yahoo('DANSKE.CO', start = datetime(2000,1,1)).rename(str.lower, axis = "columns")

@@ -1,8 +1,21 @@
 import pandas as pd
 import pickle
+import json
+from datetime import date
 from sklearn.ensemble import RandomForestRegressor# Instantiate model with 1000 decision trees
 from .TrainingData import EvaluationData
 
+class ModelScore:
+    
+    def __init__(self, date: date, score: float):
+        self.date  = date.__str__()
+        self.score = score
+        
+
+    def toJson(self, path):
+        
+        with open(path, 'w') as outfile:
+            json.dump(self.__dict__, outfile)
 
 class ModelPrediction(RandomForestRegressor):
     
@@ -34,4 +47,4 @@ class ModelPrediction(RandomForestRegressor):
         
     def readPickle(path: str):
         return pickle.load(open(path, 'rb'))
-        
+    

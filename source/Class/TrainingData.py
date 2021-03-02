@@ -12,16 +12,16 @@ from .Features import Features
 
 class EvaluationData:
     
-    def __init__(self, pastAndCurrentData: pd.DataFrame, currentData: pd.DataFrame, t: int):
+    def __init__(self, X_train: pd.DataFrame, y_train: pd.DataFrame, X_test: pd.DataFrame, y_test: pd.DataFrame, t: int):
         
         
-        self.X_train     = pastAndCurrentData.drop(columns =['label'])
-        self.y_train     = pastAndCurrentData.label
-        self.X_test      = currentData.drop(index = ['label'])
-        self.y_test      = currentData.label
+        self.X_train     = X_train
+        self.y_train     = y_train
+        self.X_test      = X_test
+        self.y_test      = y_test
         
         self.t           = t
-        self.currentDate = self.X_test.name
+        self.currentDate = self.X_test.name if len(self.X_test) == 1 else self.X_test.iloc[-1].name
         
     def __repr__(self):
         
@@ -36,7 +36,7 @@ class EvaluationData:
                 )
 
 
-class TrainingData:
+class TrainingData(EvaluationData):
     
     def __init__(self, stockProcess: StockProcess, k: int, t: int, p: float):
         
@@ -68,11 +68,13 @@ class TrainingData:
         
         # split labeled and unlabeled data
         self.labeledData   = dataframe.query("label.notna()")
-        self.unlabeledData = dataframe.query("label.isna()")
+        self.unlabeledData = dataframe.query("label.isna()").drop(columns = ['label'])
         
         # split into features (X) and labels (y)
-        self.X = self.labeledData.drop(columns = ['label']).copy()
-        self.y = self.labeledData.label.copy()
+        X = self.labeledData.drop(columns = ['label']).copy()
+        y = self.labeledData.label.copy()
+        
+        EvaluationData.__init__(self, X, y, self.unlabeledData, y_test = None, t = t)
     
     def countDaysMoreExpensiveThanCurrent(self, dataPairList: List[DataPair], p: float) -> List[Measurement]:
                 
@@ -169,9 +171,26 @@ class TrainingData:
         data = self.labeledData.copy()
         
         availableDataAtTimeX         = data.iloc[:index+1]        
-        availableTrainingDataAtTimeX = availableDataAtTimeX.iloc[:-(self.t)]
+        availableLabeledData = availableDataAtTimeX.iloc[:-(self.t)]
         currentData                  = availableDataAtTimeX.iloc[-1]
         
-        return EvaluationData(availableTrainingDataAtTimeX, currentData, self.t)
+        
+        X_train     = availableLabeledData.drop(columns =['label'])
+        y_train     = availableLabeledData.label
+        X_test      = currentData.drop(index = ['label'])
+        y_test      = currentData.label
         
         
+        return EvaluationData(X_train, y_train, X_test, y_test, self.t)
+        
+    def __repr__(self):
+        
+        emptySet = len(self.X_train) > 0
+        start    = min(self.X_train.index) if emptySet else ''
+        end      = max(self.X_train.index) if emptySet else ''
+        
+        
+        return 'TrainingData(current date: {currentDate}, training period: {period})'.format(
+                    currentDate   = self.currentDate,
+                    period         = f'{start} - {end}' if emptySet else 'None',
+                )

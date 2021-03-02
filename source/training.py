@@ -9,7 +9,8 @@ from NumberOfStocksToBuy import NumberOfStocksToBuy
 
 from Class.TrainingDataGenerator import TrainingDataGenerator
 from Class.TrainingData import TrainingData
-from Class.ModelPrediction import ModelPrediction, ModelScore
+from Class.Regression import RandomForrestModel
+from Class.ModelScore import ModelScore
 
 c25_stocks = [
     'FLS.CO',
@@ -40,16 +41,56 @@ c25_stocks = [
 ]
 
 
+#stockName = 'GN.CO'
+# stockName = 'TRYG.CO'
+stockName = 'COLO-B.CO'
+stockName = 'NOVO-B.CO'
+stockName = 'SPIC25KL.CO'
+
 
 tdGenerator = TrainingDataGenerator()
-td = tdGenerator.byStockName('GN.CO', start = date(2011, 1, 1))
+
+import pandas_datareader.data as web
+import pandas as pd
+from datetime import date
+from enum import Enum
+from typing import Optional
+from Class.StockPrice import StockPrice
+from Class.StockProcess import StockProcess
+from Class.TrainingData import TrainingData
+
+
+class PriceType(Enum):
+    
+    Open  = 'open'
+    Close = 'close'
+    Low   = 'low'
+    High  = 'high'
+
+
+data = web.get_data_yahoo(stockName)\
+            .reset_index()\
+            .rename(str.lower, axis = "columns")\
+            .loc[:,['date', PriceType.Open.value, 'volume']]
+
+td = tdGenerator.byStockName(stockName, start = date(2015, 1, 1)) #2011
+
+fullModel = RandomForrestModel(td)
+pd.DataFrame([dict(list(s.__dict__.items()) + [('price', td.stockPriceMapper(pd.to_datetime(s.date).date()))]) 
+              for s in fullModel.test_scores])
+
+td.plotTimeSeries()
+
 
 evaluationDataList = [td.splitDataAtIndex(index = i) for i in range(1000, len(td.X) + 1)]
 
 ed=evaluationDataList[1000]
 
-rf = ModelPrediction(ed)    
-pred = rf.predictSeries(ed.X_test)
+fullModel = RandomForrestModel(td)
+pred = [fullModel.predictSeries(series) for series in td.X_test.iterrows()]
+pred = fullModel.predict(td.X_test)
+list(map(fullModel.scoreMapper, pred))
+
 
 import json
 ModelScore(ed.currentDate, pred).toJson(f'{ed.currentDate}.txt')
@@ -81,13 +122,19 @@ a = z.copy()
 a = a[pd.Series(a.index).between(date(2016, 1, 1), date(2016, 5, 1)).values]
 
 
+
+
+
+
+
+
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 # create figure and axis objects with subplots()
 fig, ax = plt.subplots(dpi = 150)
 # make a plot
-sns.lineplot(a.index, a.Price, color="red")
+sns.lineplot(a.date, a.price, color="red")
 # set x-axis label
 ax.set_xlabel("",fontsize=14)
 # set y-axis label
@@ -99,7 +146,7 @@ plt.xticks(rotation=90)
 # twin object for two different y-axis on the sample plot
 ax2=ax.twinx()
 # make a plot with different y-axis using second axis object
-sns.lineplot(a.index, a["RegressionForrest"],color="blue")
+sns.lineplot(a.date, a.score,color="blue")
 ax2.set_ylabel("Model score",color="blue",fontsize=14)
 
 plt.show()
@@ -110,81 +157,3 @@ fig.savefig('model_performance.jpg',
             dpi=200,
             bbox_inches='tight')
 
-
-
-
-# Training
-X = td.X.copy()
-y = td.y.copy()
-
-# Split data
-from sklearn.model_selection import train_test_split# Split the data into training and testing sets
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.20, random_state = 42)
-
-# linear regression
-from sklearn.linear_model import LinearRegression
-lr = LinearRegression()
-lr.fit(X_train, y_train)
-y_pred_lr = lr.predict(X_test)
-
-
-# random forrest
-from sklearn.ensemble import RandomForestRegressor# Instantiate model with 1000 decision trees
-rf = RandomForestRegressor(n_estimators = 1000, random_state = 42)# Train the model on training data
-rf.fit(X_train, y_train);
-y_pred_rf = rf.predict(X_test)
-
-
-
-summaryPred = pd.DataFrame(zip(y_pred_lr, y_pred_rf, y_test), index = y_test.index).round().merge(pd.DataFrame([p.__dict__ for p in td.stockPrices]).set_index('date'), left_index = True, right_index = True)
-summaryPred['future'] = summaryPred.index.map(td.futurePrices.get)
-summaryPred['past']  = list(X_test.values)
-
-summaryPred.to_csv('temp.csv', sep = ';')
-
-# Unlabeled
-from functools import partial
-def mapToScore(moreExpensiceThanCurrentPriceCount: int, t: int) -> int:
-    return moreExpensiceThanCurrentPriceCount / t * 10
-
-
-X_unlabeled = td.unlabeledData.copy().drop(columns = ['label'])
-
-# linear regression
-y_pred_lr_unlabeled = lr.predict(X_unlabeled)
-
-# random forrest
-y_pred_rf_unlabeled = rf.predict(X_unlabeled)
-
-summaryUnlabeled = pd.DataFrame({
-     'Date': X_unlabeled.index,
-     #'LogisticRegression': map(partial(mapToScore, t = 30), y_pred_lr_unlabeled),
-     'LogisticRegression': y_pred_lr_unlabeled.round(),
-     'RandomForrest': y_pred_rf_unlabeled.round(),
-     'Price' : X_unlabeled.index.map(td.stockPriceMapper)
- })
-
-summaryUnlabeled
-
-
-
-sum((y_pred_lr.round() - y_test) ** 2)
-sum((y_pred_rf.round() - y_test) ** 2)
-
-
-danskeBank = web.get_data_yahoo('DANSKE.CO', start = datetime(2000,1,1)).rename(str.lower, axis = "columns")
-
-data = web.get_data_yahoo('DANSKE.CO', start = datetime(2011,1,1))\
-            .reset_index()\
-            .rename(str.lower, axis = "columns")\
-            .loc[:,['date', 'low', 'high', 'open', 'close', 'volume']]
-
-stockPrices = [StockPrice(*s) for s in data.values]
-
-
-pctChange = data.set_index('date').pct_change().reset_index()
-stockPricesPct = [StockPrice(*s) for s in data.values]
-pricesFromFuture
-
-
-# 1800: 367358

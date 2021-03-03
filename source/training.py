@@ -5,12 +5,13 @@ from datetime import datetime, timedelta, date
 from typing import List, Optional, Mapping
 #from DataLoader import DataLoader, Multithread
 import pandas_datareader.data as web
-from NumberOfStocksToBuy import NumberOfStocksToBuy
+#from NumberOfStocksToBuy import NumberOfStocksToBuy
 
 from Class.TrainingDataGenerator import TrainingDataGenerator
 from Class.TrainingData import TrainingData
 from Class.Regression import RandomForrestModel
 from Class.ModelScore import ModelScore
+from Class.PriceType import PriceType
 
 c25_stocks = [
     'FLS.CO',
@@ -41,11 +42,11 @@ c25_stocks = [
 ]
 
 
-#stockName = 'GN.CO'
+stockName = 'GN.CO'
 # stockName = 'TRYG.CO'
-stockName = 'COLO-B.CO'
-stockName = 'NOVO-B.CO'
-stockName = 'SPIC25KL.CO'
+# stockName = 'COLO-B.CO'
+# stockName = 'NOVO-B.CO'
+# stockName = 'SPIC25KL.CO'
 
 
 tdGenerator = TrainingDataGenerator()
@@ -58,28 +59,43 @@ from typing import Optional
 from Class.StockPrice import StockPrice
 from Class.StockProcess import StockProcess
 from Class.TrainingData import TrainingData
+from Class.getFictiveData import getFictiveData
 
 
-class PriceType(Enum):
-    
-    Open  = 'open'
-    Close = 'close'
-    Low   = 'low'
-    High  = 'high'
+# data = web.get_data_yahoo(stockName, start = date(2017, 1, 1))\
+#             .reset_index()\
+#             .rename(str.lower, axis = "columns")\
+#             .loc[:,['date', PriceType.Open.value, 'volume']]
 
-
-data = web.get_data_yahoo(stockName)\
-            .reset_index()\
-            .rename(str.lower, axis = "columns")\
-            .loc[:,['date', PriceType.Open.value, 'volume']]
-
-td = tdGenerator.byStockName(stockName, start = date(2015, 1, 1)) #2011
-
+td        = tdGenerator.byStockName('CHR.CO', start = date(2011, 1, 1)) 
 fullModel = RandomForrestModel(td)
-pd.DataFrame([dict(list(s.__dict__.items()) + [('price', td.stockPriceMapper(pd.to_datetime(s.date).date()))]) 
-              for s in fullModel.test_scores])
+summary   = fullModel.summary(td.stockPriceMapper)
 
-td.plotTimeSeries()
+
+    
+fictive =getFictiveData(td, [200, 350])
+
+[fullModel.predictSeries(s) for i, s in fictive.iterrows()]
+
+
+
+    
+rfPred = RandomForrestModel(trainingData)
+rfPred.summary(trainingData.stockPriceMapper)
+
+
+
+summaries = dict()
+
+for stockName in c25_stocks:
+    
+    td        = tdGenerator.byStockName(stockName, start = date(2011, 1, 1)) 
+    fullModel = RandomForrestModel(td)
+    summary   = fullModel.summary(td.stockPriceMapper)
+    
+    summaries[stockName] = summary
+
+    td.plotTimeSeries()
 
 
 evaluationDataList = [td.splitDataAtIndex(index = i) for i in range(1000, len(td.X) + 1)]

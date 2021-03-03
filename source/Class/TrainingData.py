@@ -41,30 +41,32 @@ class TrainingData(EvaluationData):
     def __init__(self, stockProcess: StockProcess, k: int, t: int, p: float):
         
         self.t = t
+        self.k = k
+        self.p = p
         self.stockName       = stockProcess.stockName
         self.stockPrices     = stockProcess.stockPrices
         self.stockPriceMapper= stockProcess.getMapper()
         
         # Future (labels)
-        currAndFuture   = stockProcess.splitCurrPriceAndNextTDays(t = t)        
-        self.nFutureDaysMoreExpensiveThanCurrentPrice = self.countDaysMoreExpensiveThanCurrent(currAndFuture, p = p)
-        self.futurePrices    = self.comparedPricesPerCurrentDate(currAndFuture)
+        self.currAndFuture   = stockProcess.splitCurrPriceAndNextTDays(t = t)        
+        self.nFutureDaysMoreExpensiveThanCurrentPrice = self.countDaysMoreExpensiveThanCurrent(self.currAndFuture, p = p)
+        self.futurePrices    = self.comparedPricesPerCurrentDate(self.currAndFuture)
         
         # Past (features)
-        currAndPast     = stockProcess.splitCurrPriceAndPastKDays(k = k)
-        self.nPastDaysMoreExpensiveThanCurrentPrice   = self.countDaysMoreExpensiveThanCurrent(currAndPast, p = p)
-        self.pastPrices      = self.comparedPricesPerCurrentDate(currAndPast)
+        self.currAndPast     = stockProcess.splitCurrPriceAndPastKDays(k = k)
+        self.nPastDaysMoreExpensiveThanCurrentPrice   = self.countDaysMoreExpensiveThanCurrent(self.currAndPast, p = p)
+        self.pastPrices      = self.comparedPricesPerCurrentDate(self.currAndPast)
         self.featuresForCurrentPrice = self.splitCurrentEntityAndPast(self.nPastDaysMoreExpensiveThanCurrentPrice, k = k)
     
         # For each date, join the past (features) and the future (label)
         dataframe          = self.joinFeaturesAndLabels()
         
+        # Add trend feature
+        dataframe['trend'] = self.trendFeature(dataframe.index)
+        
         # Merge seasonality component into training data frame
         seasonality        = self.seasonalityDummies(dataframe.index).rename(mapper=lambda m: 'm{}'.format(m), axis = 1)
         dataframe = dataframe.merge(seasonality, left_index = True, right_index = True, how = 'left')
-        
-        # Add trend feature
-        dataframe['trend'] = self.trendFeature(dataframe.index)
         
         # split labeled and unlabeled data
         self.labeledData   = dataframe.query("label.notna()")

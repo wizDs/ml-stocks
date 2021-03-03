@@ -1,18 +1,11 @@
 import pandas_datareader.data as web
 import pandas as pd
 from datetime import date
-from enum import Enum
 from typing import Optional
+from Class.PriceType import PriceType
 from Class.StockPrice import StockPrice
 from Class.StockProcess import StockProcess
 from Class.TrainingData import TrainingData
-
-class PriceType(Enum):
-    
-    Open  = 'open'
-    Close = 'close'
-    Low   = 'low'
-    High  = 'high'
 
 class TrainingDataGenerator:
     

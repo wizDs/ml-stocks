@@ -1,7 +1,7 @@
 import pandas as pd
 import pickle
-import json
 from datetime import date
+from typing import Mapping
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
 from .TrainingData import EvaluationData
@@ -16,7 +16,7 @@ class RandomForrestModel(RandomForestRegressor):
         self.fit(ed.X_train, ed.y_train);    
         self.t = ed.t
     
-        self.test_scores = self.predictTestData(ed)
+        self.modelScores = self.predictTestData(ed)
     
     
     def predictTestData(self, ed: EvaluationData):
@@ -24,7 +24,7 @@ class RandomForrestModel(RandomForestRegressor):
         if type(ed.X_test) == pd.Series:
             
             score      = self.predictSeries(ed.X_test)
-            modelScore = ModelScore(ed.currentDate, score)
+            modelScore = [ModelScore(ed.currentDate, score)]
                 
             return modelScore
         
@@ -61,6 +61,15 @@ class RandomForrestModel(RandomForestRegressor):
     def readPickle(path: str):
         return pickle.load(open(path, 'rb'))
     
+    def summary(self, priceMapper: Mapping[date, float] = None) -> pd.DataFrame:
+        
+        data = pd.DataFrame([ms.__dict__ for ms in self.modelScores])
+        data['date']  = pd.to_datetime(data['date']).dt.date
+        data['price'] = None if priceMapper is None else data['date'].map(priceMapper)
+            
+        return data
+    
+            
 
 class LinearModel(LinearRegression):
   
@@ -70,7 +79,7 @@ class LinearModel(LinearRegression):
         self.fit(ed.X_train, ed.y_train)
         self.t = ed.t
         
-        self.test_scores = self.predictTestData(ed)
+        self.modelScores = self.predictTestData(ed)
     
     
     def predictTestData(self, ed: EvaluationData):
@@ -115,3 +124,10 @@ class LinearModel(LinearRegression):
         return pickle.load(open(path, 'rb'))
     
     
+    def summary(self, priceMapper: Mapping[date, float] = None) -> pd.DataFrame:
+        
+        data = pd.DataFrame([ms.__dict__ for ms in self.modelScores.iterrows()])
+        data['date']  = pd.to_datetime(data['date']).dt.date
+        data['price'] = None if priceMapper is None else data['date'].map(priceMapper)
+            
+        return data

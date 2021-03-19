@@ -21,7 +21,7 @@ class EvaluationData:
         self.y_test      = y_test
         
         self.t           = t
-        self.currentDate = self.X_test.name if len(self.X_test) == 1 else self.X_test.iloc[-1].name
+        self.currentDate = self.X_test.name if isinstance(self.X_test, pd.Series) else self.X_test.iloc[-1].name
         
     def __repr__(self):
         
@@ -57,9 +57,18 @@ class TrainingData(EvaluationData):
         self.nPastDaysMoreExpensiveThanCurrentPrice   = self.countDaysMoreExpensiveThanCurrent(self.currAndPast, p = p)
         self.pastPrices      = self.comparedPricesPerCurrentDate(self.currAndPast)
         self.featuresForCurrentPrice = self.splitCurrentEntityAndPast(self.nPastDaysMoreExpensiveThanCurrentPrice, k = k)
-    
+        
+        
         # For each date, join the past (features) and the future (label)
         dataframe          = self.joinFeaturesAndLabels()
+        
+        # local trends (features)
+        returnPerDayFromButtomMapper = {m.date : m.value for m in self.returnPerDayFromButtom(self.currAndPast)}
+        returnPerDayFromTopMapper    = {m.date : m.value for m in self.returnPerDayFromTop(self.currAndPast)}
+        
+        dataframe['return_buttom'] = dataframe.index.map(returnPerDayFromButtomMapper)
+        dataframe['return_top']    = dataframe.index.map(returnPerDayFromTopMapper)
+        
         
         # Add trend feature
         dataframe['trend'] = self.trendFeature(dataframe.index)
@@ -67,6 +76,8 @@ class TrainingData(EvaluationData):
         # Merge seasonality component into training data frame
         seasonality        = self.seasonalityDummies(dataframe.index).rename(mapper=lambda m: 'm{}'.format(m), axis = 1)
         dataframe = dataframe.merge(seasonality, left_index = True, right_index = True, how = 'left')
+        
+       
         
         # split labeled and unlabeled data
         self.labeledData   = dataframe.query("label.notna()")
@@ -88,7 +99,38 @@ class TrainingData(EvaluationData):
             measurements.append(Measurement(dataPair.current.date, measurement))
             
         return measurements
+
+    def returnPerDayFromButtom(self, dataPairList: List[DataPair]) -> List[Measurement]:
+                    
+            measurements = list()
             
+            for dataPair in dataPairList:
+                
+                pastPrices     = sorted(dataPair.compared, key = lambda p: p.date, reverse=True)
+                cheapest       = min(pastPrices, key = lambda p: p.price)
+                nDaysFromToday = [i + 1 for i, x in enumerate(pastPrices) if x.date == cheapest.date][0]
+                
+                stockReturn = (dataPair.current.price / cheapest.price) / cheapest.price * 100
+                measurement = stockReturn / nDaysFromToday
+                measurements.append(Measurement(dataPair.current.date, measurement))
+                
+            return measurements            
+    
+    def returnPerDayFromTop(self, dataPairList: List[DataPair]) -> List[Measurement]:
+                    
+            measurements = list()
+            
+            for dataPair in dataPairList:
+                
+                pastPrices     = sorted(dataPair.compared, key = lambda p: p.date, reverse=True)
+                mostExpensive  = max(pastPrices, key = lambda p: p.price)
+                nDaysFromToday = [i + 1 for i, x in enumerate(pastPrices) if x.date == mostExpensive.date][0]
+                
+                stockReturn = (dataPair.current.price - mostExpensive.price) / mostExpensive.price * 100
+                measurement = stockReturn / nDaysFromToday
+                measurements.append(Measurement(dataPair.current.date, measurement))
+                
+            return measurements            
             
         
     def splitCurrentEntityAndPast(self, measurements: List[Measurement], k: int) -> List[Features]:
